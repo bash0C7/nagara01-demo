@@ -1,5 +1,5 @@
-# ランダムカラー表示デモ - 時刻ベース疑似乱数色変化
-# 内蔵5x5 LED(GPIO 27) + 時刻種子カラー生成
+# ランダムカラー表示デモ - 本当に鮮やかな色変化版
+# 内蔵5x5 LED(GPIO 27) + 各色成分を独立させた変化
 
 require 'ws2812'
 
@@ -14,34 +14,34 @@ led = WS2812.new(RMTDriver.new(led_pin))
 
 puts "LED initialized (GPIO 27, 25 LEDs)"
 
-# デフォルトオレンジ色設定（安全な輝度30）
-orange_r = 30
-orange_g = 15
-orange_b = 0
-
-puts "Setting all LEDs to orange color..."
+puts "Starting vivid color display..."
 
 # 色配列初期化
-colors = Array.new(led_count) { [orange_r, orange_g, orange_b] }
+colors = Array.new(led_count) { [0, 0, 0] }
 
 puts "Starting continuous LED display..."
 
 # 連続点灯ループ
 loop do
   time_seed = Time.now.to_i
-  # 各成分で異なる計算をして変化をつける
-  r_random = (time_seed % 50)
-  g_random = ((time_seed * 3) % 15) 
-  b_random = ((time_seed * 7) % 180)
   
-  # 毎回色に乱数を加えてLED更新
+  # 毎回色を大胆に変化させてLED更新
   led_count.times do |i|
-    time_seed = Time.now.to_i
-    colors[i] = [orange_r + r_random, orange_g  + orange_g + g_random, orange_b + b_random]
+    # 各LEDと各色成分で全然違う計算をする
+    r_seed = time_seed * 7 + i * 13
+    g_seed = time_seed * 11 + i * 17
+    b_seed = time_seed * 19 + i * 23
+    
+    # 各色成分を0か高い値かの二択で鮮やかに
+    r = (r_seed % 7 < 2) ? 0 : (r_seed % 40 + 10)
+    g = (g_seed % 7 < 2) ? 0 : (g_seed % 40 + 10) 
+    b = (b_seed % 7 < 2) ? 0 : (b_seed % 40 + 10)
+    
+    colors[i] = [r, g, b]
   end
   
   # LED表示更新
   led.show_rgb(*colors)
   
-  sleep_ms 100  # 100ms間隔で更新
+  sleep_ms 150
 end
