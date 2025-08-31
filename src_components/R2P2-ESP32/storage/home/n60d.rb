@@ -24,6 +24,7 @@ end
 
 # 距離に応じたスペクトラム色計算
 colors = Array.new(led_count) { [0, 0, 0] }
+last_valid_color = [255, 0, 0]  # 直近有効色（初期値：赤）
 
 loop do
   distance = vl53l0x.read_distance
@@ -47,6 +48,7 @@ loop do
       b = (255 * ratio).to_i
     end
     
+    last_valid_color = [r, g, b]  # 直近有効色を更新
     puts "Distance: #{distance}mm, RGB: [#{r}, #{g}, #{b}]"
     
     # 全LEDに同色適用
@@ -54,9 +56,15 @@ loop do
       colors[i] = [r, g, b]
     end
   else
-    # センサー範囲外は消灯
+    # センサー範囲外は直近色を20%輝度で表示
+    dimmed_r = (last_valid_color[0] * 0.2).to_i
+    dimmed_g = (last_valid_color[1] * 0.2).to_i
+    dimmed_b = (last_valid_color[2] * 0.2).to_i
+    
+    puts "Out of range - Dimmed RGB: [#{dimmed_r}, #{dimmed_g}, #{dimmed_b}]"
+    
     led_count.times do |i|
-      colors[i] = [0, 0, 0]
+      colors[i] = [dimmed_r, dimmed_g, dimmed_b]
     end
   end
   
