@@ -13,12 +13,14 @@ $note_byte = 0
 $active_notes = []
 $arpeggio_pos = 0
 
+puts "MIDI LED Visualizer Starting..."
 sleep_ms(1000)
 byte1 = 0xC0.chr
 byte2 = 83.chr  
 program_change = byte1 + byte2
 $midi_uart.write(program_change)
 sleep_ms(100)
+puts "Ready!"
 
 def get_color(note, velocity)
   semitone = note % 12
@@ -71,7 +73,20 @@ def get_color(note, velocity)
 end
 
 def add_note(note, velocity)
-  $active_notes.push(note)
+  found = false
+  i = 0
+  while i < $active_notes.length
+    if $active_notes[i] == note
+      found = true
+      break
+    end
+    i += 1
+  end
+  
+  if !found
+    $active_notes.push(note)
+    puts "Note ON: #{note} (#{$active_notes.length} active)"
+  end
 end
 
 def remove_note(note)
@@ -79,6 +94,7 @@ def remove_note(note)
   while i < $active_notes.length
     if $active_notes[i] == note
       $active_notes.delete_at(i)
+      puts "Note OFF: #{note} (#{$active_notes.length} active)"
       break
     end
     i += 1
@@ -93,28 +109,45 @@ def update_display
   end
   
   if $active_notes.length > 0
-    note = $active_notes[0]
-    color = get_color(note, 100)
-    
-    pos = ($arpeggio_pos) % 60
-    $colors[pos] = color
-    
-    if pos > 0
-      $colors[pos - 1] = color / 4
+    i = 0
+    while i < $active_notes.length
+      note = $active_notes[i]
+      color = get_color(note, 120)
+      
+      pos = ($arpeggio_pos + i * 20) % 60
+      $colors[pos] = color
+      
+      if pos > 0
+        $colors[pos - 1] = color / 3
+      end
+      if pos < 59
+        $colors[pos + 1] = color / 3
+      end
+      
+      i += 1
     end
-    if pos < 59
-      $colors[pos + 1] = color / 4
-    end
     
+    $arpeggio_pos = ($arpeggio_pos + 2) % 60
+  else
+    pos = $arpeggio_pos % 60
+    $colors[pos] = 0x001100
     $arpeggio_pos = ($arpeggio_pos + 1) % 60
   end
 end
 
+loop_count = 0
+
 loop do
+  loop_count += 1
+  
   data = $pc_uart.read
   
   if data && data.length > 0
     $midi_uart.write(data)
+    
+    if loop_count <= 5
+      puts "MIDI Data: #{data.bytes.map{|b| sprintf('%02X', b)}.join(' ')}"
+    end
     
     byte_index = 0
     while byte_index < data.length
