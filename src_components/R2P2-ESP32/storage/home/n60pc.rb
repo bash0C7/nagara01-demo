@@ -43,29 +43,74 @@ puts "9. 音色設定後スリープ完了"
 def update_light(note, velocity, is_note_on)
   return if note < 36 || note > 84
   
-  pos = (note - 36) * 59 / 48
+  # 12音階を60個のLEDにマッピング（5倍拡張）
+  semitone = (note - 36) % 12
+  octave = (note - 36) / 12
+  pos = semitone * 5 + octave
   return if pos < 0 || pos >= 60
   
   if is_note_on
-    color_type = ((note - 36) / 12) % 6
+    # 12音階を色スペクトラムにマッピング（ド=赤→シ=紫）
     brightness = velocity * 2
     brightness = 255 if brightness > 255
     
-    case color_type
-    when 0; $colors[pos] = brightness << 16
-    when 1; $colors[pos] = brightness << 8
-    when 2; $colors[pos] = brightness
-    when 3; $colors[pos] = (brightness << 16) | (brightness << 8)
-    when 4; $colors[pos] = (brightness << 8) | brightness
-    when 5; $colors[pos] = (brightness << 16) | brightness
+    case semitone
+    when 0  # ド
+      r, g, b = brightness, 0, 0
+    when 1  # ド#
+      r, g, b = brightness, brightness/4, 0
+    when 2  # レ
+      r, g, b = brightness, brightness/2, 0
+    when 3  # レ#
+      r, g, b = brightness, brightness*3/4, 0
+    when 4  # ミ
+      r, g, b = brightness, brightness, 0
+    when 5  # ファ
+      r, g, b = brightness/2, brightness, 0
+    when 6  # ファ#
+      r, g, b = 0, brightness, 0
+    when 7  # ソ
+      r, g, b = 0, brightness, brightness/2
+    when 8  # ソ#
+      r, g, b = 0, brightness, brightness
+    when 9  # ラ
+      r, g, b = 0, brightness/2, brightness
+    when 10 # ラ#
+      r, g, b = 0, 0, brightness
+    when 11 # シ
+      r, g, b = brightness/2, 0, brightness
     end
     
-    $colors[pos - 1] = $colors[pos] / 3 if pos > 0
-    $colors[pos + 1] = $colors[pos] / 3 if pos < 59
+    color = (r << 16) | (g << 8) | b
+    $colors[pos] = color
+    
+    # 拡散効果：隣接2/3、さらに隣接1/3
+    if pos > 0
+      $colors[pos - 1] = color * 2 / 3
+    end
+    if pos < 59
+      $colors[pos + 1] = color * 2 / 3
+    end
+    if pos > 1
+      $colors[pos - 2] = color / 3
+    end
+    if pos < 58
+      $colors[pos + 2] = color / 3
+    end
   else
     $colors[pos] = 0
-    $colors[pos - 1] = 0 if pos > 0
-    $colors[pos + 1] = 0 if pos < 59
+    if pos > 0
+      $colors[pos - 1] = 0
+    end
+    if pos < 59
+      $colors[pos + 1] = 0
+    end
+    if pos > 1
+      $colors[pos - 2] = 0
+    end
+    if pos < 58
+      $colors[pos + 2] = 0
+    end
   end
 end
 
