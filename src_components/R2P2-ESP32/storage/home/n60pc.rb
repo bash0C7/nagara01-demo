@@ -20,6 +20,8 @@ puts "5. カラー配列初期化完了"
 $midi_state = 0
 $status_byte = 0
 $note_byte = 0
+$active_notes = {}  # 現在鳴っている音程と開始時刻
+$arpeggio_pos = 0   # アルペジオ位置カウンタ
 puts "6. グローバル変数初期化完了"
 
 # 音色設定
@@ -40,47 +42,80 @@ puts "8-5. MIDI音色設定送信完了"
 sleep_ms(100)
 puts "9. 音色設定後スリープ完了"
 
+def get_spectrum_color(note, velocity)
+  # 12音階を0-11にマッピング（ドレミファソラシド + 半音）
+  semitone = note % 12
+  brightness = velocity * 2
+  brightness = 255 if brightness > 255
+  
+  # 12音階をR→G→Bスペクトラムにマッピング
+  case semitone
+  when 0; [brightness, 0, 0]           # ド: 赤
+  when 1; [brightness, brightness/4, 0] # ド#: 赤オレンジ
+  when 2; [brightness, brightness/2, 0] # レ: オレンジ
+  when 3; [brightness, brightness*3/4, 0] # レ#: 黄オレンジ
+  when 4; [brightness, brightness, 0]   # ミ: 黄
+  when 5; [brightness/2, brightness, 0] # ファ: 黄緑
+  when 6; [0, brightness, 0]           # ファ#: 緑
+  when 7; [0, brightness, brightness/2] # ソ: 青緑
+  when 8; [0, brightness, brightness]   # ソ#: シアン
+  when 9; [0, brightness/2, brightness] # ラ: 青シアン
+  when 10; [0, 0, brightness]          # ラ#: 青
+  when 11; [brightness/2, 0, brightness] # シ: 青紫
+  end
+end
+
 def update_light(note, velocity, is_note_on)
-  return if note < 36 || note > 84
-  
-  pos = (note - 36) * 59 / 48
-  return if pos < 0 || pos >= 60
-  
   if is_note_on
-    color_type = ((note - 36) / 12) % 6
-    brightness = velocity * 2
-    brightness = 255 if brightness > 255
-    
-    case color_type
-    when 0; $colors[pos] = brightness << 16
-    when 1; $colors[pos] = brightness << 8
-    when 2; $colors[pos] = brightness
-    when 3; $colors[pos] = (brightness << 16) | (brightness << 8)
-    when 4; $colors[pos] = (brightness << 8) | brightness
-    when 5; $colors[pos] = (brightness << 16) | brightness
-    end
-    
-    $colors[pos - 1] = $colors[pos] / 3 if pos > 0
-    $colors[pos + 1] = $colors[pos] / 3 if pos < 59
+    $active_notes[note] = velocity
   else
-    $colors[pos] = 0
-    $colors[pos - 1] = 0 if pos > 0
-    $colors[pos + 1] = 0 if pos < 59
+    $active_notes.delete(note)
   end
 end
 
-puts "10. update_light関数定義完了"
-
-def fade_lights
-  i = 0
-  while i < 60
-    $colors[i] = $colors[i] * 97 / 100 if $colors[i] > 5
-    $colors[i] = 0 if $colors[i] <= 5
-    i += 1
+def update_arpeggio_display
+  # 全LEDをリセット
+  60.times { |i| $colors[i] = 0 }
+  
+  return if $active_notes.empty?
+  
+  # アクティブな音程の色を計算
+  note_colors = {}
+  $active_notes.each do |note, velocity|
+    note_colors[note] = get_spectrum_color(note, velocity)
   end
+  
+  # アルペジオ効果：複数音が鳴っている場合は混合表示
+  $active_notes.keys.each_with_index do |note, idx|
+    color = note_colors[note]
+    
+    # アルペジオ位置計算（各音程で位相をずらす）
+    phase_offset = idx * 15  # 音程ごとに位相差
+    wave_pos = ($arpeggio_pos + phase_offset) % 60
+    
+    # 波状に3つのLEDを光らせる
+    (-1..1).each do |offset|
+      led_pos = (wave_pos + offset) % 60
+      intensity = offset == 0 ? 1.0 : 0.3  # 中心は明るく、両端は暗く
+      
+      # 既存の色と加算合成
+      r = ($colors[led_pos] >> 16) & 0xFF
+      g = ($colors[led_pos] >> 8) & 0xFF  
+      b = $colors[led_pos] & 0xFF
+      
+      r = [r + (color[0] * intensity).to_i, 255].min
+      g = [g + (color[1] * intensity).to_i, 255].min
+      b = [b + (color[2] * intensity).to_i, 255].min
+      
+      $colors[led_pos] = (r << 16) | (g << 8) | b
+    end
+  end
+  
+  # アルペジオ位置を進める
+  $arpeggio_pos = ($arpeggio_pos + 2) % 60
 end
 
-puts "11. fade_lights関数定義完了"
+puts "10. update_light/arpeggio関数定義完了"
 
 def build_rgb_array
   rgb_array = []
@@ -98,9 +133,9 @@ def build_rgb_array
   rgb_array
 end
 
-puts "12. build_rgb_array関数定義完了"
+puts "11. build_rgb_array関数定義完了"
 
-puts "13. メインループ開始"
+puts "12. メインループ開始"
 loop_count = 0
 
 loop do
@@ -109,21 +144,21 @@ loop do
     puts "ループ#{loop_count}回目実行中"
   end
   
-  puts "14. データ読み取り開始" if loop_count == 1
+  puts "13. データ読み取り開始" if loop_count == 1
   data = $pc_uart.read
-  puts "15. データ読み取り完了" if loop_count == 1
+  puts "14. データ読み取り完了" if loop_count == 1
   
   if data && data.length > 0
     puts "★受信データ: 長さ#{data.length} 内容:#{data.bytes.map{|b| sprintf('%02X', b)}.join(' ')}"
     
-    puts "17. MIDI転送開始" if loop_count <= 3
+    puts "15. MIDI転送開始" if loop_count <= 3
     $midi_uart.write(data)
-    puts "18. MIDI転送完了" if loop_count <= 3
+    puts "16. MIDI転送完了" if loop_count <= 3
     
-    puts "19. バイト処理開始" if loop_count <= 3
+    puts "17. バイト処理開始" if loop_count <= 3
     byte_index = 0
     while byte_index < data.length
-      puts "20. バイト#{byte_index}処理中" if loop_count == 1
+      puts "18. バイト#{byte_index}処理中" if loop_count == 1
       
       byte = data[byte_index].ord
       puts "★バイト値: #{sprintf('%02X', byte)} 状態:#{$midi_state}" if loop_count <= 2
@@ -152,18 +187,18 @@ loop do
       
       byte_index += 1
     end
-    puts "22. バイト処理完了" if loop_count <= 3
+    puts "19. バイト処理完了" if loop_count <= 3
   end
   
-  puts "23. フェード処理開始" if loop_count == 1
-  fade_lights
-  puts "24. フェード処理完了" if loop_count == 1
+  puts "20. アルペジオ表示更新開始" if loop_count == 1
+  update_arpeggio_display
+  puts "21. アルペジオ表示更新完了" if loop_count == 1
   
-  puts "25. LED表示開始" if loop_count == 1
+  puts "22. LED表示開始" if loop_count == 1
   $led.show_hex(*$colors)
-  puts "26. LED表示完了" if loop_count == 1
+  puts "23. LED表示完了" if loop_count == 1
   
-  puts "27. スリープ開始" if loop_count == 1
+  puts "24. スリープ開始" if loop_count == 1
   sleep_ms(25)
-  puts "28. スリープ完了" if loop_count == 1
+  puts "25. スリープ完了" if loop_count == 1
 end
