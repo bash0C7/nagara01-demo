@@ -69,5 +69,5 @@ loop do
   end
   
   led.show_rgb(*colors)
-  sleep_ms 100
+  sleep_ms 50
 end

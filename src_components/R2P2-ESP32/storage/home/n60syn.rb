@@ -50,25 +50,24 @@ end
 sleep_ms(1000)
 
 # コマンドハンドラー登録
-asr.on(0x17) do  # "pause" - Breath Noise
+asr.on(0x17) do  # "pause"
   orange_r = 10
   orange_g = 5
   orange_b = 0
-  play_effect_sound(midi_uart, 121, 60, 80, 800)  # Breath Noise
+  play_effect_sound(midi_uart, 98, 42, 110, 3500)  # sound track
 end
 
-asr.on(0x30) do  # "ok" - Applause
+asr.on(0x30) do  # "ok" - 
   orange_r = 50
   orange_g = 20
   orange_b = 0
-  play_effect_sound(midi_uart, 126, 60, 100, 1200)  # Applause
+  play_effect_sound(midi_uart, 100, 44, 110, 3500)  # atmosphere
 end
 
-asr.on(0x10) do  # "open" - 風の音
+asr.on(0x10) do  # "open" - Atmosphere
   orange_r = 220
   orange_g = 140
-  orange_b = 0
-  play_effect_sound(midi_uart, 99, 40, 110, 1500)  # Atmosphere（低めの音程で風感）
+  orange_b =   play_effect_sound(midi_uart, 99, 40, 110, 3500)  # cristal
 end
 
 loop do
