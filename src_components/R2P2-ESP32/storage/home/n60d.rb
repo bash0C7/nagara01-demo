@@ -22,21 +22,42 @@ unless vl53l0x.ready?
   puts "Failed to initialize VL53L0X sensor"
 end
 
-# 自然なオレンジ色（RGB比率を保持）
-orange_r = 200
-orange_g = 100  # 30→100に増加
-orange_b = 0
-
+# 距離に応じたスペクトラム色計算
 colors = Array.new(led_count) { [0, 0, 0] }
 
 loop do
   distance = vl53l0x.read_distance
-  brightness = distance > 0 ? ((2000 - distance) * 255.0 / 2000.0).to_i : 0
-  puts "Distance: #{distance}mm, Brightness: #{brightness}"
-
-  # RGB全体に明度適用（色比率を保持）
-  led_count.times do |i|
-    colors[i] = [orange_r, orange_g, orange_b].map { |c| (c * brightness / 255.0).to_i }
+  
+  if distance > 0 && distance <= 2000
+    # 距離を0-1の範囲に正規化
+    normalized = distance / 2000.0
+    
+    # RGB スペクトラム計算（赤→緑→青）
+    if normalized < 0.5
+      # 近距離: 赤→緑へ遷移
+      ratio = normalized * 2
+      r = (255 * (1 - ratio)).to_i
+      g = (255 * ratio).to_i
+      b = 0
+    else
+      # 遠距離: 緑→青へ遷移
+      ratio = (normalized - 0.5) * 2
+      r = 0
+      g = (255 * (1 - ratio)).to_i
+      b = (255 * ratio).to_i
+    end
+    
+    puts "Distance: #{distance}mm, RGB: [#{r}, #{g}, #{b}]"
+    
+    # 全LEDに同色適用
+    led_count.times do |i|
+      colors[i] = [r, g, b]
+    end
+  else
+    # センサー範囲外は消灯
+    led_count.times do |i|
+      colors[i] = [0, 0, 0]
+    end
   end
   
   led.show_rgb(*colors)
